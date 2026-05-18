@@ -1,0 +1,219 @@
+@model TaskManager.Models.PagedResult<TaskManager.Models.TaskItem>
+@{
+    ViewData["Title"] = "Задачи";
+    var statuses = ViewBag.Statuses as IEnumerable<string>;
+    var projects = ViewBag.Projects as IEnumerable<TaskManager.Models.Project>;
+    var users = ViewBag.Users as IEnumerable<TaskManager.Models.User>;
+    var currentRole = ViewBag.CurrentUserRole as string;
+}
+
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="h3 mb-0 text-gray-800">Задачи</h1>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form asp-action="Index" method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Проект</label>
+                    <select name="ProjectId" class="form-select">
+                        <option value="">Все проекты</option>
+                        @foreach (var project in projects ?? Enumerable.Empty<TaskManager.Models.Project>())
+                        {
+                            <option value="@project.Id" selected="@(ViewBag.ProjectId == project.Id)">@project.Title</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Статус</label>
+                    <select name="StatusName" class="form-select">
+                        <option value="">Все статусы</option>
+                        @foreach (var status in statuses ?? Enumerable.Empty<string>())
+                        {
+                            <option value="@status" selected="@(ViewBag.StatusName == status)">@status</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Исполнитель</label>
+                    <select name="AssigneeId" class="form-select">
+                        <option value="">Все исполнители</option>
+                        @foreach (var user in users ?? Enumerable.Empty<TaskManager.Models.User>())
+                        {
+                            <option value="@user.Id" selected="@(ViewBag.AssigneeId == user.Id)">@user.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Фильтровать
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Список задач -->
+    <div class="card shadow-sm">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Список задач (@Model.TotalCount)</h6>
+            @if (currentRole == "Администратор" || currentRole == "Менеджер")
+            {
+                <a asp-action="Create" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus"></i> Создать задачу
+                </a>
+            }
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">#</th>
+                            <th>Название</th>
+                            <th>Проект</th>
+                            <th>Статус</th>
+                            <th>Приоритет</th>
+                            <th>Исполнитель</th>
+                            <th>Срок</th>
+                            <th style="width: 100px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Items.Any())
+                        {
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    Задачи не найдены
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var task in Model.Items)
+                            {
+                                <tr>
+                                    <td>@task.Id</td>
+                                    <td>
+                                        <a asp-action="Details" asp-route-id="@task.Id" class="text-decoration-none">
+                                            @task.Title
+                                        </a>
+                                    </td>
+                                    <td>@task.Project?.Title</td>
+                                    <td>
+                                        <span class="badge bg-@GetStatusBadgeClass(task.StatusName)">
+                                            @task.StatusName
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-@GetPriorityBadgeClass(task.Priority)">
+                                            @task.GetPriorityName()
+                                        </span>
+                                    </td>
+                                    <td>@(task.Assignee?.Name ?? "Не назначен")</td>
+                                    <td>@(task.DueDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                    <td>
+                                        <a asp-action="Details" asp-route-id="@task.Id" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Пагинация -->
+        @if (Model.TotalPages > 1)
+        {
+            <div class="card-footer">
+                <nav aria-label="Пагинация">
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                            <a class="page-link" asp-action="Index" 
+                               asp-route-pageNumber="@(Model.PageNumber - 1)"
+                               asp-route-pageSize="@Model.PageSize"
+                               asp-route-projectId="@ViewBag.ProjectId"
+                               asp-route-statusName="@ViewBag.StatusName"
+                               asp-route-assigneeId="@ViewBag.AssigneeId">
+                                Предыдущая
+                            </a>
+                        </li>
+                        
+                        @for (int i = 1; i <= Model.TotalPages; i++)
+                        {
+                            <li class="page-item @(i == Model.PageNumber ? "active" : "")">
+                                <a class="page-link" asp-action="Index" 
+                                   asp-route-pageNumber="@i"
+                                   asp-route-pageSize="@Model.PageSize"
+                                   asp-route-projectId="@ViewBag.ProjectId"
+                                   asp-route-statusName="@ViewBag.StatusName"
+                                   asp-route-assigneeId="@ViewBag.AssigneeId">
+                                    @i
+                                </a>
+                            </li>
+                        }
+                        
+                        <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                            <a class="page-link" asp-action="Index" 
+                               asp-route-pageNumber="@(Model.PageNumber + 1)"
+                               asp-route-pageSize="@Model.PageSize"
+                               asp-route-projectId="@ViewBag.ProjectId"
+                               asp-route-statusName="@ViewBag.StatusName"
+                               asp-route-assigneeId="@ViewBag.AssigneeId">
+                                Следующая
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                
+                <!-- Выбор размера страницы -->
+                <div class="d-flex justify-content-center mt-2">
+                    <select class="form-select form-select-sm" style="width: auto;" 
+                            onchange="location.href='?pageSize=' + this.value + '&projectId=@ViewBag.ProjectId&statusName=@ViewBag.StatusName&assigneeId=@ViewBag.AssigneeId'">
+                        <option value="20" selected="@(Model.PageSize == 20)">20</option>
+                        <option value="50" selected="@(Model.PageSize == 50)">50</option>
+                        <option value="100" selected="@(Model.PageSize == 100)">100</option>
+                    </select>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@functions {
+    string GetStatusBadgeClass(string status) => status switch
+    {
+        "К выполнению" => "secondary",
+        "В работе" => "primary",
+        "На проверке" => "warning",
+        "Завершено" => "success",
+        _ => "light"
+    };
+
+    string GetPriorityBadgeClass(int priority) => priority switch
+    {
+        1 => "info",
+        2 => "success",
+        3 => "warning",
+        4 => "danger",
+        _ => "secondary"
+    };
+}
+
+@section Styles {
+    <style>
+        .table td {
+            vertical-align: middle;
+        }
+        .badge {
+            min-width: 80px;
+        }
+    </style>
+}
